@@ -26,6 +26,7 @@ export const userTemperatureProfile = createTable("userTemperatureProfiles", {
   bedTime: time("bedTime").notNull(),
   wakeupTime: time("wakeupTime").notNull(),
   initialSleepLevel: integer("initialSleepLevel").notNull(),
+  midStageTime: time("midStageTime").notNull(),
   finalSleepLevel: integer("finalSleepLevel").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

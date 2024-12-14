@@ -226,6 +226,7 @@ export const userRouter = createTRPCRouter({
         bedTime: z.string().time(),
         wakeupTime: z.string().time(),
         initialSleepLevel: z.number().int().min(-100).max(100),
+        midStageTime: z.string().time(),
         midStageTemperatures: z.array(z.object({
           time: z.string().time(),
           temperature: z.number().int().min(-100).max(100),
@@ -248,6 +249,7 @@ export const userRouter = createTRPCRouter({
               bedTime: input.bedTime,
               wakeupTime: input.wakeupTime,
               initialSleepLevel: input.initialSleepLevel,
+              midStageTime: input.midStageTime,
               finalSleepLevel: input.finalSleepLevel,
               timezoneTZ: input.timezoneTZ,
               updatedAt: new Date(),
@@ -258,6 +260,7 @@ export const userRouter = createTRPCRouter({
                 bedTime: input.bedTime,
                 wakeupTime: input.wakeupTime,
                 initialSleepLevel: input.initialSleepLevel,
+                midStageTime: input.midStageTime,
                 finalSleepLevel: input.finalSleepLevel,
                 timezoneTZ: input.timezoneTZ,
                 updatedAt: new Date(),

@@ -16,6 +16,7 @@ const temperatureProfileSchema = z.object({
   bedTime: z.string().regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format"),
   wakeupTime: z.string().regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format"),
   initialSleepLevel: z.number().min(-10).max(10),
+  midStageTime: z.string().regex(/^\d{2}:\d{2}$/, "Must be in HH:MM format"),
   midStageTemperatures: z.array(midStageTemperatureSchema),
   finalSleepLevel: z.number().min(-10).max(10),
   timezone: z.object({
@@ -49,6 +50,7 @@ export const TemperatureProfileForm: React.FC = () => {
       bedTime: "22:00",
       wakeupTime: "06:00",
       initialSleepLevel: 0,
+      midStageTime: "23:00",
       midStageTemperatures: [],
       finalSleepLevel: 0,
       timezone: { value: "America/New_York" },
@@ -61,7 +63,12 @@ export const TemperatureProfileForm: React.FC = () => {
       if (data) {
         setIsExistingProfile(true);
         setMidStageTemperatures(data.midStageTemperatures);
-        // Set other form values...
+        setValue('bedTime', data.bedTime);
+        setValue('wakeupTime', data.wakeupTime);
+        setValue('initialSleepLevel', data.initialSleepLevel);
+        setValue('midStageTime', data.midStageTime);
+        setValue('finalSleepLevel', data.finalSleepLevel);
+        setValue('timezone', { value: data.timezoneTZ });
       }
       setIsLoading(false);
     },
@@ -98,6 +105,58 @@ export const TemperatureProfileForm: React.FC = () => {
   return (
     <div className="max-w-2xl mx-auto mt-8 p-6 bg-white rounded-lg shadow-xl">
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Bed Time</label>
+            <input
+              type="time"
+              {...register('bedTime')}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+            {errors.bedTime && (
+              <p className="mt-1 text-sm text-red-600">{errors.bedTime.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Wake-up Time</label>
+            <input
+              type="time"
+              {...register('wakeupTime')}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+            {errors.wakeupTime && (
+              <p className="mt-1 text-sm text-red-600">{errors.wakeupTime.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Initial Sleep Level</label>
+            <input
+              type="number"
+              {...register('initialSleepLevel', { valueAsNumber: true })}
+              min="-10"
+              max="10"
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+            {errors.initialSleepLevel && (
+              <p className="mt-1 text-sm text-red-600">{errors.initialSleepLevel.message}</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700">Mid-stage Time</label>
+            <input
+              type="time"
+              {...register('midStageTime')}
+              className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500"
+            />
+            {errors.midStageTime && (
+              <p className="mt-1 text-sm text-red-600">{errors.midStageTime.message}</p>
+            )}
+          </div>
+        </div>
+
         {/* Existing bed time and initial temperature controls */}
         
         <div className="space-y-4">
