@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { createTRPCRouter, publicProcedure } from "~/server/api/trpc";
 import { db } from "~/server/db";
-import { users, userTemperatureProfile } from "~/server/db/schema";
+import { users, userTemperatureProfile, midStageTemperatures } from "~/server/db/schema";
 import { cookies } from "next/headers";
 import {
   authenticate,
@@ -197,6 +197,9 @@ export const userRouter = createTRPCRouter({
 
       const profile = await db.query.userTemperatureProfile.findFirst({
         where: eq(userTemperatureProfile.email, decoded.email),
+        with: {
+          midStageTemperatures: true,
+        },
       });
 
       if (!profile) {
@@ -223,7 +226,10 @@ export const userRouter = createTRPCRouter({
         bedTime: z.string().time(),
         wakeupTime: z.string().time(),
         initialSleepLevel: z.number().int().min(-100).max(100),
-        midStageSleepLevel: z.number().int().min(-100).max(100),
+        midStageTemperatures: z.array(z.object({
+          time: z.string().time(),
+          temperature: z.number().int().min(-100).max(100),
+        })),
         finalSleepLevel: z.number().int().min(-100).max(100),
         timezoneTZ: z.string().max(50),
       }),
@@ -231,34 +237,54 @@ export const userRouter = createTRPCRouter({
     .mutation(async ({ input, ctx }) => {
       try {
         const decoded = await checkAuthCookie(ctx.headers);
-        const updatedProfile = {
-          email: decoded.email,
-          bedTime: input.bedTime,
-          wakeupTime: input.wakeupTime,
-          initialSleepLevel: input.initialSleepLevel,
-          midStageSleepLevel: input.midStageSleepLevel,
-          finalSleepLevel: input.finalSleepLevel,
-          timezoneTZ: input.timezoneTZ,
-          updatedAt: new Date(),
-        };
-        console.log("Updated profile:", updatedProfile);
-
-        await db
-          .insert(userTemperatureProfile)
-          .values(updatedProfile)
-          .onConflictDoUpdate({
-            target: userTemperatureProfile.email,
-            set: {
+        
+        // Start a transaction
+        await db.transaction(async (tx) => {
+          // Update the main profile
+          await tx
+            .insert(userTemperatureProfile)
+            .values({
+              email: decoded.email,
               bedTime: input.bedTime,
               wakeupTime: input.wakeupTime,
               initialSleepLevel: input.initialSleepLevel,
-              midStageSleepLevel: input.midStageSleepLevel,
               finalSleepLevel: input.finalSleepLevel,
               timezoneTZ: input.timezoneTZ,
               updatedAt: new Date(),
-            },
-          })
-          .execute();
+            })
+            .onConflictDoUpdate({
+              target: userTemperatureProfile.email,
+              set: {
+                bedTime: input.bedTime,
+                wakeupTime: input.wakeupTime,
+                initialSleepLevel: input.initialSleepLevel,
+                finalSleepLevel: input.finalSleepLevel,
+                timezoneTZ: input.timezoneTZ,
+                updatedAt: new Date(),
+              },
+            })
+            .execute();
+
+          // Delete existing mid-stage temperatures
+          await tx
+            .delete(midStageTemperatures)
+            .where(eq(midStageTemperatures.email, decoded.email))
+            .execute();
+
+          // Insert new mid-stage temperatures
+          if (input.midStageTemperatures.length > 0) {
+            await tx
+              .insert(midStageTemperatures)
+              .values(
+                input.midStageTemperatures.map((temp) => ({
+                  email: decoded.email,
+                  time: temp.time,
+                  temperature: temp.temperature,
+                }))
+              )
+              .execute();
+          }
+        });
 
         await adjustTemperature();
 

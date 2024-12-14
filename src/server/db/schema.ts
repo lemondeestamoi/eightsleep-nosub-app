@@ -6,9 +6,10 @@ import {
   time,
   timestamp,
   varchar,
+  serial,
 } from "drizzle-orm/pg-core";
 
-export const createTable = pgTableCreator((name) => `8slp_${name}`); // also in drizzle.config.ts
+export const createTable = pgTableCreator((name) => `8slp_${name}`);
 
 export const users = createTable("users", {
   email: varchar("email", { length: 255 }).notNull().primaryKey(),
@@ -25,11 +26,21 @@ export const userTemperatureProfile = createTable("userTemperatureProfiles", {
   bedTime: time("bedTime").notNull(),
   wakeupTime: time("wakeupTime").notNull(),
   initialSleepLevel: integer("initialSleepLevel").notNull(),
-  midStageSleepLevel: integer("midStageSleepLevel").notNull(),
   finalSleepLevel: integer("finalSleepLevel").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   timezoneTZ: varchar("timezone", { length: 50 }).notNull(),
+});
+
+export const midStageTemperatures = createTable("midStageTemperatures", {
+  id: serial("id").primaryKey(),
+  email: varchar("email", { length: 255 })
+    .notNull()
+    .references(() => userTemperatureProfile.email, { onDelete: "cascade" }),
+  time: time("time").notNull(),
+  temperature: integer("temperature").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
 export const usersRelations = relations(users, ({ one }) => ({
@@ -39,9 +50,10 @@ export const usersRelations = relations(users, ({ one }) => ({
   }),
 }));
 
-export const userTemperatureProfileRelations = relations(userTemperatureProfile, ({ one }) => ({
+export const userTemperatureProfileRelations = relations(userTemperatureProfile, ({ one, many }) => ({
   user: one(users, {
     fields: [userTemperatureProfile.email],
     references: [users.email],
   }),
+  midStageTemperatures: many(midStageTemperatures),
 }));

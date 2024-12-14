@@ -89,6 +89,57 @@ interface TestMode {
   currentTime: Date;
 }
 
+function findClosestTemperature(
+  currentTime: Date,
+  midStageTemperatures: { time: string; temperature: number }[],
+  bedTime: Date,
+  wakeupTime: Date,
+  initialSleepLevel: number,
+  finalSleepLevel: number
+): number {
+  // Convert all mid-stage times to Date objects for comparison
+  const midStageDates = midStageTemperatures.map(temp => {
+    const [hours, minutes] = temp.time.split(':').map(Number);
+    const tempDate = new Date(currentTime);
+    tempDate.setHours(hours, minutes, 0, 0);
+    if (tempDate < bedTime) {
+      tempDate.setDate(tempDate.getDate() + 1);
+    }
+    return {
+      date: tempDate,
+      temperature: temp.temperature
+    };
+  });
+
+  // Sort all temperature points by time
+  const allPoints = [
+    { date: bedTime, temperature: initialSleepLevel },
+    ...midStageDates,
+    { date: wakeupTime, temperature: finalSleepLevel }
+  ].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+  // Find the surrounding temperature points
+  let beforePoint = allPoints[0];
+  let afterPoint = allPoints[allPoints.length - 1];
+
+  for (let i = 0; i < allPoints.length - 1; i++) {
+    if (currentTime >= allPoints[i]!.date && currentTime < allPoints[i + 1]!.date) {
+      beforePoint = allPoints[i]!;
+      afterPoint = allPoints[i + 1]!;
+      break;
+    }
+  }
+
+  // Calculate interpolated temperature
+  const timeDiff = afterPoint.date.getTime() - beforePoint.date.getTime();
+  const currentDiff = currentTime.getTime() - beforePoint.date.getTime();
+  const ratio = currentDiff / timeDiff;
+  
+  return Math.round(
+    beforePoint.temperature + (afterPoint.temperature - beforePoint.temperature) * ratio
+  );
+}
+
 export async function adjustTemperature(testMode?: TestMode): Promise<void> {
   try {
     const profiles = await db
@@ -176,39 +227,31 @@ export async function adjustTemperature(testMode?: TestMode): Promise<void> {
         console.log(`Current sleep stage for user ${profile.users.email}: ${currentSleepStage}`);
 
         if (isNearPreHeating || isNearBedTime || isNearMidStage || isNearFinalStage || isNearWakeup) {
-          let targetLevel: number;
-          let sleepStage: string;
+          const midStageTemps = await db
+            .select()
+            .from(midStageTemperatures)
+            .where(eq(midStageTemperatures.email, profile.users.email))
+            .execute();
 
-          if (isNearPreHeating || (isNearBedTime && userNow < adjustedCycle.bedTime)) {
-            targetLevel = userTemperatureProfile.initialSleepLevel;
-            sleepStage = "pre-heating";
-          } else if (isNearBedTime || (isNearMidStage && userNow < adjustedCycle.midStageTime)) {
-            targetLevel = userTemperatureProfile.initialSleepLevel;
-            sleepStage = "initial";
-          } else if (isNearMidStage || (isNearFinalStage && userNow < adjustedCycle.finalStageTime)) {
-            targetLevel = userTemperatureProfile.midStageSleepLevel;
-            sleepStage = "mid";
-          } else {
-            targetLevel = userTemperatureProfile.finalSleepLevel;
-            sleepStage = "final";
-          }
+          const targetLevel = findClosestTemperature(
+            userNow,
+            midStageTemps,
+            adjustedCycle.bedTime,
+            adjustedCycle.wakeupTime,
+            userTemperatureProfile.initialSleepLevel,
+            userTemperatureProfile.finalSleepLevel
+          );
 
-          console.log(`Adjusting temperature for ${sleepStage} stage for user ${profile.users.email}`);
+          console.log(`Adjusting temperature for ${currentSleepStage} stage for user ${profile.users.email}`);
 
           if (!heatingStatus.isHeating) {
-            if (testMode?.enabled) {
-              console.log(`[TEST MODE] Would turn on heating for user ${profile.users.email}`);
-            } else {
+            if (!testMode?.enabled) {
               await retryApiCall(() => turnOnSide(token, profile.users.eightUserId));
-              console.log(`Heating turned on for user ${profile.users.email}`);
             }
           }
           if (heatingStatus.heatingLevel !== targetLevel) {
-            if (testMode?.enabled) {
-              console.log(`[TEST MODE] Would set heating level to ${targetLevel} for user ${profile.users.email}`);
-            } else {
+            if (!testMode?.enabled) {
               await retryApiCall(() => setHeatingLevel(token, profile.users.eightUserId, targetLevel));
-              console.log(`Heating level set to ${targetLevel} for user ${profile.users.email}`);
             }
           }
         } else if (heatingStatus.isHeating && userNow > adjustedCycle.wakeupTime && !isWithinTimeRange(userNow, adjustedCycle.wakeupTime, 15)) {
